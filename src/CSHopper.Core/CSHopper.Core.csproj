@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>NU1701</NoWarn>
+    <RootNamespace>CSHopper</RootNamespace>
+    <AssemblyName>CSHopper.Core</AssemblyName>
+    <Description>Reusable Roslyn compile/param-mapping engine for CSHopper, kept separate from the .gha plugin project so it can be unit-tested as a plain library.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grasshopper" Version="8.0.23304.9001" IncludeAssets="compile;build" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+  </ItemGroup>
+
+</Project>

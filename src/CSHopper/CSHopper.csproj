@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TargetExt>.gha</TargetExt>
+    <NoWarn>NU1701</NoWarn>
+    <RootNamespace>CSHopper</RootNamespace>
+    <AssemblyName>CSHopper</AssemblyName>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <PackageId>CSHopper</PackageId>
+    <Description>Live-syncs a Grasshopper C# script component to a .cs file editable in VS Code.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grasshopper" Version="8.0.23304.9001" IncludeAssets="compile;build" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CSHopper.Core\CSHopper.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Dev convenience: deploy straight into Grasshopper's plugin folder after each build.
+       Rhino must be closed while building, since it locks the loaded .gha/.dll files. -->
+  <Target Name="DeployToGrasshopper" AfterTargets="Build">
+    <ItemGroup>
+      <DeployFiles Include="$(OutDir)**\*.*" Exclude="$(OutDir)**\*.xml" />
+    </ItemGroup>
+    <MakeDir Directories="$(AppData)\Grasshopper\Libraries\CSHopper" />
+    <Copy SourceFiles="@(DeployFiles)"
+          DestinationFolder="$(AppData)\Grasshopper\Libraries\CSHopper\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
