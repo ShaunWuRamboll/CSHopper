@@ -111,9 +111,17 @@ the component appears under the **CSHopper → Script** tab.
 
 Supported parameter types: `object`, `string`, `bool`, `int`, `double`, `Point3d`,
 `Vector3d`, `Plane`, `Line`, `Circle`, `Rectangle3d`, `Curve`, `Brep`, `Mesh`,
-`Surface`, `GeometryBase`, `Guid`, `Color`, plus `List<T>` of any of the above
-(mapped to `GH_ParamAccess.list`; anything unrecognized falls back to a generic
-object parameter). Data trees (`GH_Structure`) are not supported yet.
+`Surface`, `GeometryBase`, `Guid`, `Color`, plus:
+
+- `List<T>` of any of the above -> `GH_ParamAccess.list`.
+- `DataTree<T>` of any of the above -> `GH_ParamAccess.tree`, using Grasshopper's own
+  `Grasshopper.DataTree<T>` class (the same type the native script component uses).
+  Reading an input tree parameter converts each branch item from the underlying
+  `IGH_Goo` wrapper to `T` (via `IGH_Goo.CastTo<T>`, falling back to `ScriptVariable()`).
+  Writing an output tree just calls `DA.SetDataTree(...)` directly, since
+  `DataTree<T>` already implements Grasshopper's `IGH_DataTree`.
+
+Anything unrecognized falls back to a generic object parameter.
 
 ## Sharing a definition with a colleague
 
@@ -146,8 +154,6 @@ themselves.
 
 ## Known limitations
 
-- Data trees / `GH_Structure` inputs and outputs aren't supported (item and
-  `List<T>` access only).
 - No hot-reload inside a running Rhino session for the plugin itself — changing
   `CSHopperComponent.cs`/`CSHopper.Core` requires closing Rhino, rebuilding, and
   reopening (this only affects CSHopper's own development, not day-to-day use of

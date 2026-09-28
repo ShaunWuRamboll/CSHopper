@@ -42,16 +42,23 @@ public static class ParamTypeMap
         return dot >= 0 ? t[(dot + 1)..] : t;
     }
 
+    private static GH_ParamAccess ToParamAccess(ScriptParamAccess access) => access switch
+    {
+        ScriptParamAccess.List => GH_ParamAccess.list,
+        ScriptParamAccess.Tree => GH_ParamAccess.tree,
+        _ => GH_ParamAccess.item,
+    };
+
     public static IGH_Param CreateParam(ScriptParameterInfo info)
     {
-        var lookupType = info.IsList ? info.InnerTypeText : info.TypeText;
+        var lookupType = info.Access == ScriptParamAccess.Item ? info.TypeText : info.InnerTypeText;
         var key = ShortName(lookupType);
         var factory = Map.TryGetValue(key, out var f) ? f : () => new Param_GenericObject();
         var param = factory();
         param.Name = info.Name;
         param.NickName = info.Name;
         param.Description = info.Name;
-        param.Access = info.IsList ? GH_ParamAccess.list : GH_ParamAccess.item;
+        param.Access = ToParamAccess(info.Access);
         param.Optional = true;
         return param;
     }
@@ -60,9 +67,8 @@ public static class ParamTypeMap
     public static bool Matches(IGH_Param existing, ScriptParameterInfo info)
     {
         if (existing.Name != info.Name) return false;
-        var desiredAccess = info.IsList ? GH_ParamAccess.list : GH_ParamAccess.item;
-        if (existing.Access != desiredAccess) return false;
-        var lookupType = info.IsList ? info.InnerTypeText : info.TypeText;
+        if (existing.Access != ToParamAccess(info.Access)) return false;
+        var lookupType = info.Access == ScriptParamAccess.Item ? info.TypeText : info.InnerTypeText;
         var key = ShortName(lookupType);
         var factory = Map.TryGetValue(key, out var f) ? f : () => new Param_GenericObject();
         var probe = factory();

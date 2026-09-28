@@ -1,6 +1,8 @@
 namespace CSHopper;
 
-public sealed record ScriptParameterInfo(string Name, string TypeText, bool IsList, string InnerTypeText);
+public enum ScriptParamAccess { Item, List, Tree }
+
+public sealed record ScriptParameterInfo(string Name, string TypeText, ScriptParamAccess Access, string InnerTypeText);
 
 public sealed class ScriptCompileResult
 {

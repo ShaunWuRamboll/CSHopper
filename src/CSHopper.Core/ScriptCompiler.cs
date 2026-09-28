@@ -18,6 +18,10 @@ public static class ScriptCompiler
         @"^(?:global::)?(?:System\.Collections\.Generic\.)?List<\s*(.+)\s*>$",
         RegexOptions.Compiled);
 
+    private static readonly Regex TreePattern = new(
+        @"^(?:global::)?(?:Grasshopper\.)?DataTree<\s*(.+)\s*>$",
+        RegexOptions.Compiled);
+
     private static readonly string[] ReservedInjectedNames =
     {
         "RhinoDocument", "GrasshopperDocument", "Component", "Iteration",
@@ -61,10 +65,26 @@ public static class ScriptCompiler
             string modifier = p.Modifiers.Any(SyntaxKind.OutKeyword) ? "out" : p.Modifiers.Any(SyntaxKind.RefKeyword) ? "ref" : "";
 
             var listMatch = ListPattern.Match(typeText);
-            bool isList = listMatch.Success;
-            string innerType = isList ? listMatch.Groups[1].Value.Trim() : typeText;
+            var treeMatch = TreePattern.Match(typeText);
+            ScriptParamAccess access;
+            string innerType;
+            if (treeMatch.Success)
+            {
+                access = ScriptParamAccess.Tree;
+                innerType = treeMatch.Groups[1].Value.Trim();
+            }
+            else if (listMatch.Success)
+            {
+                access = ScriptParamAccess.List;
+                innerType = listMatch.Groups[1].Value.Trim();
+            }
+            else
+            {
+                access = ScriptParamAccess.Item;
+                innerType = typeText;
+            }
 
-            var info = new ScriptParameterInfo(name, typeText, isList, innerType);
+            var info = new ScriptParameterInfo(name, typeText, access, innerType);
             callArgs.Add(string.IsNullOrEmpty(modifier) ? name : $"{modifier} {name}");
 
             if (isOut) outputs.Add(info);
@@ -184,15 +204,27 @@ public static class ScriptCompiler
         for (int i = 0; i < inputs.Count; i++)
         {
             var p = inputs[i];
-            if (p.IsList)
-                sb.AppendLine($"    global::System.Collections.Generic.List<{p.InnerTypeText}> {p.Name} = new global::System.Collections.Generic.List<{p.InnerTypeText}>();");
-            else
-                sb.AppendLine($"    {p.TypeText} {p.Name} = default({p.TypeText});");
+            switch (p.Access)
+            {
+                case ScriptParamAccess.Tree:
+                    sb.AppendLine($"    global::Grasshopper.Kernel.Data.GH_Structure<global::Grasshopper.Kernel.Types.IGH_Goo> {p.Name}__tree;");
+                    sb.AppendLine($"    DA.GetDataTree({i}, out {p.Name}__tree);");
+                    sb.AppendLine($"    global::Grasshopper.DataTree<{p.InnerTypeText}> {p.Name} = global::CSHopper.TreeAccess.ToDataTree<{p.InnerTypeText}>({p.Name}__tree);");
+                    break;
+                case ScriptParamAccess.List:
+                    sb.AppendLine($"    global::System.Collections.Generic.List<{p.InnerTypeText}> {p.Name} = new global::System.Collections.Generic.List<{p.InnerTypeText}>();");
+                    break;
+                default:
+                    sb.AppendLine($"    {p.TypeText} {p.Name} = default({p.TypeText});");
+                    break;
+            }
         }
         for (int i = 0; i < outputs.Count; i++)
         {
             var p = outputs[i];
-            if (p.IsList)
+            if (p.Access == ScriptParamAccess.Tree)
+                sb.AppendLine($"    global::Grasshopper.DataTree<{p.InnerTypeText}> {p.Name} = new global::Grasshopper.DataTree<{p.InnerTypeText}>();");
+            else if (p.Access == ScriptParamAccess.List)
                 sb.AppendLine($"    global::System.Collections.Generic.List<{p.InnerTypeText}> {p.Name} = new global::System.Collections.Generic.List<{p.InnerTypeText}>();");
             else
                 sb.AppendLine($"    {p.TypeText} {p.Name} = default({p.TypeText});");
@@ -202,10 +234,11 @@ public static class ScriptCompiler
         for (int i = 0; i < inputs.Count; i++)
         {
             var p = inputs[i];
-            if (p.IsList)
+            if (p.Access == ScriptParamAccess.List)
                 sb.AppendLine($"    DA.GetDataList({i}, {p.Name});");
-            else
+            else if (p.Access == ScriptParamAccess.Item)
                 sb.AppendLine($"    DA.GetData({i}, ref {p.Name});");
+            // Tree inputs are already read above, right where they're declared.
         }
 
         sb.AppendLine();
@@ -215,7 +248,9 @@ public static class ScriptCompiler
         for (int i = 0; i < outputs.Count; i++)
         {
             var p = outputs[i];
-            if (p.IsList)
+            if (p.Access == ScriptParamAccess.Tree)
+                sb.AppendLine($"    DA.SetDataTree({i}, {p.Name});");
+            else if (p.Access == ScriptParamAccess.List)
                 sb.AppendLine($"    DA.SetDataList({i}, {p.Name});");
             else
                 sb.AppendLine($"    DA.SetData({i}, {p.Name});");
@@ -248,6 +283,7 @@ public static class ScriptCompiler
         AddIfMissing(refs, typeof(Rhino.RhinoDoc).Assembly.Location);
         AddIfMissing(refs, typeof(Grasshopper.Kernel.GH_Component).Assembly.Location);
         AddIfMissing(refs, typeof(GH_IO.Serialization.GH_IWriter).Assembly.Location);
+        AddIfMissing(refs, typeof(ScriptCompiler).Assembly.Location); // for CSHopper.TreeAccess
 
         return refs;
     }

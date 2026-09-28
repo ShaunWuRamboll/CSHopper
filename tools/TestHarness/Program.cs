@@ -69,12 +69,49 @@ public class Script_Instance : GH_ScriptInstance
 }
 """;
 
+const string treeScript = """
+using System;
+using System.Collections.Generic;
+using Grasshopper;
+using Grasshopper.Kernel;
+
+public class Script_Instance : GH_ScriptInstance
+{
+    private void RunScript(DataTree<double> values, ref DataTree<double> doubled)
+    {
+        var result = new DataTree<double>();
+        foreach (var path in values.Paths)
+        {
+            var branch = new List<double>();
+            foreach (var v in values.Branch(path)) branch.Add(v * 2);
+            result.AddRange(branch, path);
+        }
+        doubled = result;
+    }
+}
+""";
+
 Console.WriteLine("=== Test 1: exact GH boilerplate (object x, object y, ref object a) ===");
 RunTest(boilerplate, new Dictionary<int, object?> { [0] = 3.0, [1] = 4.0 });
 
 Console.WriteLine();
 Console.WriteLine("=== Test 2: typed + list script (double x, List<double> ys, ref double sum, ref string message) ===");
 RunTest(typedScript, new Dictionary<int, object?> { [0] = 10.0, [1] = new List<double> { 1.0, 2.0, 3.0 } });
+
+Console.WriteLine();
+Console.WriteLine("=== Test 3: data tree access (DataTree<double> values, ref DataTree<double> doubled) ===");
+RunTest(treeScript, new Dictionary<int, object?> { [0] = BuildTestTree() });
+
+// Kept in its own method (not inline in Main) so the Grasshopper.DataTree<T>/GH_Path type
+// references are only JITted/resolved when this runs — after the resolver above is registered.
+static object BuildTestTree()
+{
+    var inputTree = new Grasshopper.DataTree<double>();
+    inputTree.Add(1.0, new GH_Path(0));
+    inputTree.Add(2.0, new GH_Path(0));
+    inputTree.Add(10.0, new GH_Path(1));
+    return inputTree;
+}
 
 static void RunTest(string source, Dictionary<int, object?> inputValues)
 {
@@ -100,6 +137,7 @@ static void RunTest(string source, Dictionary<int, object?> inputValues)
 static string Describe(object? o) => o switch
 {
     null => "null",
+    Grasshopper.DataTree<double> tree => string.Join("; ", tree.Paths.Select(p => $"{p}:[{string.Join(",", tree.Branch(p))}]")),
     IEnumerable e and not string => "[" + string.Join(", ", e.Cast<object>()) + "]",
     _ => o.ToString() ?? "null"
 };
@@ -151,8 +189,8 @@ sealed class FakeDataAccess : IGH_DataAccess
     public bool SetDataList(int paramIndex, IEnumerable data) { Outputs[paramIndex] = data.Cast<object>().ToList(); return true; }
     public bool SetDataList(int paramIndex, IEnumerable data, int listIndexOverride) => SetDataList(paramIndex, data);
     public bool SetDataList(string paramName, IEnumerable data) => true;
-    public bool SetDataTree(int paramIndex, IGH_DataTree tree) => true;
-    public bool SetDataTree(int paramIndex, IGH_Structure tree) => true;
+    public bool SetDataTree(int paramIndex, IGH_DataTree tree) { Outputs[paramIndex] = tree; return true; }
+    public bool SetDataTree(int paramIndex, IGH_Structure tree) { Outputs[paramIndex] = tree; return true; }
     public bool BlitData<Q>(int paramIndex, GH_Structure<Q> tree, bool overwrite) where Q : IGH_Goo => true;
 
     public bool GetData<T>(int index, ref T destination)
@@ -169,6 +207,16 @@ sealed class FakeDataAccess : IGH_DataAccess
     }
     public bool GetDataList<T>(string name, List<T> list) => false;
 
-    public bool GetDataTree<T>(int index, out GH_Structure<T> tree) where T : IGH_Goo { tree = new GH_Structure<T>(); return false; }
+    public bool GetDataTree<T>(int index, out GH_Structure<T> tree) where T : IGH_Goo
+    {
+        tree = new GH_Structure<T>();
+        if (_inputs.TryGetValue(index, out var v) && v is Grasshopper.DataTree<double> source)
+        {
+            foreach (var path in source.Paths)
+                tree.AppendRange(source.Branch(path).Select(d => (T)(object)new GH_Number(d)), path);
+            return true;
+        }
+        return false;
+    }
     public bool GetDataTree<T>(string name, out GH_Structure<T> tree) where T : IGH_Goo { tree = new GH_Structure<T>(); return false; }
 }
