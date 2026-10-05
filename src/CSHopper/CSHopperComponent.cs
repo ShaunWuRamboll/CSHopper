@@ -69,8 +69,10 @@ public class Script_Instance : GH_ScriptInstance
     }
 
     public override Guid ComponentGuid => new("b2a92a5b-985a-487b-8f11-c19e85e16927");
-    protected override System.Drawing.Bitmap? Icon => null;
+    protected override System.Drawing.Bitmap? Icon => _icon;
     public override GH_Exposure Exposure => GH_Exposure.primary;
+
+    private static readonly System.Drawing.Bitmap _icon = CSHopperIcon.Create(24);
 
     protected override void RegisterInputParams(GH_InputParamManager pManager) { }
     protected override void RegisterOutputParams(GH_OutputParamManager pManager) { }
